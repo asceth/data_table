@@ -3,7 +3,7 @@ module DataTable
     module ClassMethods
 
       def _find_objects params, fields, search_fields
-        self.where(_where_conditions params[:sSearch], search_fields).
+        self.where(_where_conditions params[:ssearch], search_fields).
              includes(_discover_joins fields).
              order(_order_fields params, fields).
              paginate :page => _page(params), :per_page => _per_page(params)
@@ -31,17 +31,24 @@ module DataTable
       def _where_conditions query, search_fields, join_operator = "OR"
         return if query.blank?
 
-        conditions = []
-        parameters = []
+        all_conditions = []
+        all_parameters = []
 
-        search_fields.map do |field|
-          clause = _where_condition(query, field)
-          next if clause.empty?
-          conditions << clause.shift
-          parameters += clause
+        query.split.each do |term|
+          conditions = []
+          parameters = []
+
+          search_fields.each do |field|
+            next if (clause = _where_condition(term, field.dup)).empty?
+            conditions << clause.shift
+            parameters += clause
+          end
+
+          all_conditions << conditions
+          all_parameters << parameters
         end
 
-        ["(" + conditions.join(" #{join_operator} ") + ")", *parameters.flatten]
+        [all_conditions.map {|conditions| "(" + conditions.join(" #{join_operator} ") + ")" }.join(" AND "), *all_parameters.flatten]
       end
 
       def _where_condition query, field
@@ -51,19 +58,9 @@ module DataTable
           options = field.extract_options!
 
           if options[:split]
-            conditions = []
-            parameters = []
-            split_query = query.split(options[:split])
-
-            if split_query.size == field.size
-              field.map do |f|
-                conditions << "UPPER(#{f}) LIKE ?"
-                parameters << "%#{split_query.shift.upcase}%"
-              end
-              ["(" + conditions.join(" AND ") + ")", *parameters]
-            else
-              []
-            end
+            _split_where_condition query, field, options[:split]
+          elsif options[:date]
+            _date_where_condition query, field.first
           else
             _where_conditions(query, field, "AND")
           end
@@ -72,9 +69,34 @@ module DataTable
         end
       end
 
+      def _date_where_condition query, field
+        begin
+          ["#{field} = ?", Date.parse(query)]
+        rescue ArgumentError
+          []
+        end
+      end
+
+      def _split_where_condition query, fields, splitter
+        conditions = []
+        parameters = []
+        split_query = query.split splitter
+
+        if split_query.size == fields.size
+          fields.map do |f|
+            conditions << "UPPER(#{f}) LIKE ?"
+            parameters << "%#{split_query.shift.upcase}%"
+          end
+
+          ["(" + conditions.join(" AND ") + ")", *parameters]
+        else
+          []
+        end
+      end
+
       def _order_fields params, fields
-        direction = params[:sSortDir_0] == "asc" ? "ASC" : "DESC"
-        %{#{fields[params[:iSortCol_0].to_i]} #{direction}}
+        direction = params[:ssortdir_0] == "asc" ? "ASC" : "DESC"
+        %{#{fields[params[:isortcol_0].to_i]} #{direction}}
       end
     end
   end

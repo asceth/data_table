@@ -1,3 +1,3 @@
 module DataTable
-  VERSION = "0.1.9"
+  VERSION = "0.4.1"
 end

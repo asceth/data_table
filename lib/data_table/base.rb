@@ -27,7 +27,7 @@ module DataTable
       objects.map do |object|
         block[object].map do |string|
           controller.instance_eval %{
-            Rails.logger.silence do
+            Rails.logger.quietly do
               render_to_string :inline => %Q|#{string}|, :locals => {:#{self.name.underscore} => object}
             end
           }
